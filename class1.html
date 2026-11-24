@@ -295,7 +295,8 @@
       <li>กล่องโค้ดสีเข้มให้<b>พิมพ์โค้ดตามที่ผู้สอนสาธิต</b> แล้วกดปุ่ม <b>▶ รัน</b> หรือกด <b>Ctrl + Enter</b> (Mac ใช้ ⌘ + Enter) เพื่อดูผลลัพธ์ ลองแก้ค่าต่าง ๆ แล้วรันใหม่ได้</li>
       <li>ถ้าโค้ดมี <code>input()</code> ให้พิมพ์ค่าในช่องสีเหลือง <b>“ค่าที่ป้อนให้ input()”</b> บรรทัดละ 1 ค่า ตามลำดับที่โค้ดถาม (ถ้าเว้นว่าง หน้าเว็บจะเด้งกล่องให้พิมพ์)</li>
       <li>แต่ละกล่องรัน<b>แยกจากกัน</b> ตัวแปรในกล่องหนึ่งจะไม่ส่งต่อไปกล่องอื่น (ต่างจาก Colab ที่ทุกเซลล์ใช้ตัวแปรร่วมกัน)</li>
-      <li>ในแท็บ ✍️ แบบฝึกหัด มีปุ่ม <b>✅ ตรวจคำตอบ</b> ที่ทดสอบโค้ดด้วยข้อมูลหลายชุดเทียบกับเฉลย และบอกว่าผิดตรงไหน โค้ดและผลการตรวจจะจำไว้ในเบราว์เซอร์เครื่องนี้</li>
+      <li>ในแท็บ ✍️ แบบฝึกหัด มีปุ่ม <b>✅ ตรวจคำตอบ</b> ที่ทดสอบโค้ดด้วยข้อมูลหลายชุดเทียบกับเฉลย และบอกว่าผิดตรงไหน</li>
+      <li>💾 โค้ดและค่าที่ป้อนในทุกกล่อง<b>บันทึกอัตโนมัติ</b>ในเบราว์เซอร์เครื่องนี้ ปิดแล้วเปิดหน้าใหม่ก็ยังอยู่ (ถ้าเปลี่ยนเครื่อง เปลี่ยนเบราว์เซอร์ หรือใช้โหมดไม่ระบุตัวตน โค้ดจะไม่ตามไปด้วย ควรคัดลอกงานสำคัญเก็บไว้ใน Colab)</li>
       <li>ครั้งแรกที่เปิดหน้า เบราว์เซอร์ต้องดาวน์โหลด Python (ประมาณ 10 MB) ใช้เวลา 5–20 วินาที ดูสถานะที่มุมขวาบน ต้องต่ออินเทอร์เน็ต</li>
     </ul>
     <div class="cell" data-label="ลองพิมพ์โค้ดแรกของคุณ">
@@ -1151,7 +1152,10 @@ document.querySelectorAll('div.cell[data-label]').forEach((cell, i)=>{
   // so students type along with the instructor's live coding.
   const prefill = cell.hasAttribute('data-prefill');
   const start = prefill ? original : '';
-  ta.value = start;
+  // Everything typed is kept in this browser (localStorage) and restored on reload.
+  const key = 'cell_' + i;
+  const savedCode = sget(key + '_code');
+  ta.value = savedCode !== null ? savedCode : start;
   let stdinTa = null;
   const out = document.createElement('pre'); out.className='out';
   const err = document.createElement('div'); err.className='errbox';
@@ -1162,12 +1166,17 @@ document.querySelectorAll('div.cell[data-label]').forEach((cell, i)=>{
     const box = document.createElement('div'); box.className='stdin';
     box.innerHTML = `<label>ค่าที่ป้อนให้ input()</label><textarea spellcheck="false" placeholder="บรรทัดละ 1 ค่า ตามลำดับที่โค้ดถาม"></textarea>`;
     stdinTa = box.querySelector('textarea');
-    stdinTa.value = stdin || '';
+    const savedIn = sget(key + '_stdin');
+    stdinTa.value = savedIn !== null ? savedIn : (stdin || '');
+    stdinTa.addEventListener('input', ()=>sset(key + '_stdin', stdinTa.value));
     cell.appendChild(box);
   }
+  let saveT = null;
+  const persist = ()=>{ clearTimeout(saveT); saveT = setTimeout(()=>sset(key + '_code', ed.get()), 300); };
+  if (window.CodeMirror){ cell.querySelector('.CodeMirror').CodeMirror.on('change', persist); } else { ta.addEventListener('input', persist); }
   cell.appendChild(out); cell.appendChild(err);
   bar.querySelector('.run').onclick = run;
-  bar.querySelector('.rst').onclick = ()=>{ ed.set(start); ed.clearMarks(); out.textContent=''; err.innerHTML=''; if (stdinTa) stdinTa.value = stdin || ''; };
+  bar.querySelector('.rst').onclick = ()=>{ ed.set(start); ed.clearMarks(); out.textContent=''; err.innerHTML=''; if (stdinTa){ stdinTa.value = stdin || ''; sset(key + '_stdin', stdinTa.value); } sset(key + '_code', start); };
   registerEditor(cell, ed);
 });
 
@@ -1211,7 +1220,11 @@ function buildExercise(ex, idx, host){
   const saved = sget('code_' + ex.id);
   ta.value = saved !== null ? saved : ex.starter;
   const stdinTa = card.querySelector('.stdin textarea');
-  if (stdinTa) stdinTa.value = (ex.tests[0].inputs || []).join('\n');
+  if (stdinTa){
+    const savedIn = sget('stdin_' + ex.id);
+    stdinTa.value = savedIn !== null ? savedIn : (ex.tests[0].inputs || []).join('\n');
+    stdinTa.addEventListener('input', ()=>sset('stdin_' + ex.id, stdinTa.value));
+  }
   const out = card.querySelector('pre.out'), err = card.querySelector('.errbox');
   const runBtn = card.querySelector('.run');
   let ed;
